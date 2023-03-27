@@ -17,6 +17,7 @@ use TYPO3\CMS\Extbase\Configuration\ConfigurationManager;
 use TYPO3\CMS\Extbase\Mvc\Web\Routing\UriBuilder;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
+use TYPO3\CMS\Backend\Utility\BackendUtility;
 
 class ClearCachePostProc
 {
@@ -100,14 +101,26 @@ class ClearCachePostProc
                 $distributionIds = $tsConfig['distributionIds'];
             }
             
-
-
-            /* If the record is not a page, enqueue only the current page */
+            /* If the record is not a page, try to enqueue the preview URl or the current page if no preview is available */
             if ($table != 'pages') {
-                $this->queueClearCache($uid_page, false, $distributionIds);
+                if ( isset($params['TSConfig']['preview.'][$table . '.']['previewPageId']) ) {
+                    $previewPageId = $params['TSConfig']['preview.'][$table . '.']['previewPageId'];
+                    //try {
+                    $previewUrl = BackendUtility::getPreviewUrl(
+                        $previewPageId,
+                        '',
+                        BackendUtility::BEgetRootLine($previewPageId),
+                        '',
+                        '',
+                        $this->getPreviewUrlParameters($previewPageId, $table, $uid, $params['TSConfig']['preview.'][$table . '.'])
+                    );
+                    $this->enqueue($previewUrl, $distributionIds);
+                } else {
+                    $this->queueClearCache($uid_page, false, $distributionIds);
+                }
             } else {
 
-                if (!$tsConfig['cearCache_disable']) {
+                if (!$tsConfig['clearCache_disable']) {
 
                     if (is_numeric($parentId)) {
                         $parentId = intval($parentId);
@@ -129,6 +142,68 @@ class ClearCachePostProc
             }
         }
         $this->clearCache();
+    }
+
+    /**
+     * Returns the parameters for the preview URL
+     *
+     * @param int $previewPageId
+     * @param string $table
+     * @param int $recordId
+     * @param array $previewConfiguration
+     * @return string
+     */
+    protected function getPreviewUrlParameters(int $previewPageId, string $table, int $recordId, array $previewConfiguration ): string
+    {
+        $linkParameters = [];
+        $recordArray = BackendUtility::getRecord($table, $recordId);
+
+
+        // map record data to GET parameters
+        if (isset($previewConfiguration['fieldToParameterMap.'])) {
+            foreach ($previewConfiguration['fieldToParameterMap.'] as $field => $parameterName) {
+                $value = $recordArray[$field];
+                if ($field === 'uid') {
+                    $value = $recordId;
+                }
+                $parameterName = str_replace('_preview', '', $parameterName);
+                $linkParameters[$parameterName] = $value;
+            }
+        }
+
+        // add/override parameters by configuration
+        if (isset($previewConfiguration['additionalGetParameters.'])) {
+            $additionalGetParameters = [];
+            $this->parseAdditionalGetParameters(
+                $additionalGetParameters,
+                $previewConfiguration['additionalGetParameters.']
+            );
+            $linkParameters = array_replace($linkParameters, $additionalGetParameters);
+        }
+
+        return HttpUtility::buildQueryString($linkParameters, '&');
+    }
+
+    /**
+     * Migrates a set of (possibly nested) GET parameters in TypoScript syntax to a plain array
+     *
+     * This basically removes the trailing dots of sub-array keys in TypoScript.
+     * The result can be used to create a query string with GeneralUtility::implodeArrayForUrl().
+     *
+     * @param array $parameters Should be an empty array by default
+     * @param array $typoScript The TypoScript configuration
+     */
+    protected function parseAdditionalGetParameters(array &$parameters, array $typoScript)
+    {
+        foreach ($typoScript as $key => $value) {
+            if (is_array($value)) {
+                $key = rtrim($key, '.');
+                $parameters[$key] = [];
+                $this->parseAdditionalGetParameters($parameters[$key], $value);
+            } else {
+                $parameters[$key] = $value;
+            }
+        }
     }
 
     /**
