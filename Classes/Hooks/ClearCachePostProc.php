@@ -105,7 +105,6 @@ class ClearCachePostProc
             if ($table != 'pages') {
                 if ( isset($params['TSConfig']['preview.'][$table . '.']['previewPageId']) ) {
                     $previewPageId = $params['TSConfig']['preview.'][$table . '.']['previewPageId'];
-                    //try {
                     $previewUrl = BackendUtility::getPreviewUrl(
                         $previewPageId,
                         '',
@@ -114,6 +113,7 @@ class ClearCachePostProc
                         '',
                         $this->getPreviewUrlParameters($previewPageId, $table, $uid, $params['TSConfig']['preview.'][$table . '.'])
                     );
+                    $previewUrl = parse_url($previewUrl, PHP_URL_PATH);
                     $this->enqueue($previewUrl, $distributionIds);
                 } else {
                     $this->queueClearCache($uid_page, false, $distributionIds);
