@@ -244,11 +244,6 @@ class ClearCachePostProc
         }
 
 
-        if ($distributionIds === null) {
-            $distributionIds = $this->cloudFrontConfiguration['distributionIds'];
-        }
-
-
         if (MathUtility::canBeInterpretedAsInteger($entry)) {
             /* language handling */
             $databaseConnection = $this->getDatabaseConnection();
@@ -270,6 +265,9 @@ class ClearCachePostProc
 
     protected function enqueue($link, $distributionIds)
     {
+        if ($distributionIds === null) {
+            $distributionIds = $this->cloudFrontConfiguration['distributionIds'];
+        }
         $distArray = explode(',', $distributionIds);
 
 
